@@ -69,6 +69,14 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> updateDisplayName(String newName) async {
+    final updated = await _authService.updateDisplayName(newName);
+    if (updated != null) {
+      _user = updated;
+      notifyListeners();
+    }
+  }
+
   Future<bool> resetPassword({required String email}) async {
     _setLoading(true);
     _errorMessage = null;

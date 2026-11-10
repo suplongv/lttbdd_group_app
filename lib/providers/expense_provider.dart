@@ -3,15 +3,38 @@ import '../models/models.dart';
 import '../data/initial_data.dart';
 
 class ExpenseProvider extends ChangeNotifier {
-  List<TransactionItem> _transactions = List.from(initialTransactions);
+  List<TransactionItem> _transactions = buildInitialTransactions();
   List<PresetItem> _presets = List.from(initialPresetItems);
   List<SavingsGoal> _savingsGoals = List.from(initialSavingsGoals);
-  final List<ExpenseCategory> _categories = List.from(initialCategories);
+  final List<ExpenseCategory> _expenseCategories = List.from(initialExpenseCategories);
+  final List<ExpenseCategory> _incomeCategories = List.from(initialIncomeCategories);
+
+  // Ngân sách theo tháng: key = 'YYYY-MM:categoryId' hoặc 'YYYY-MM:total'
+  final Map<String, double> _monthlyBudgets = {};
 
   List<TransactionItem> get transactions => _transactions;
   List<PresetItem> get presets => _presets;
   List<SavingsGoal> get savingsGoals => _savingsGoals;
-  List<ExpenseCategory> get categories => _categories;
+  List<ExpenseCategory> get expenseCategories => _expenseCategories;
+  List<ExpenseCategory> get incomeCategories => _incomeCategories;
+  List<ExpenseCategory> get categories => _expenseCategories;
+
+  ExpenseCategory findCategory(String categoryId, {TransactionType? fallbackType}) {
+    for (final c in _expenseCategories) {
+      if (c.id == categoryId) return c;
+    }
+    for (final c in _incomeCategories) {
+      if (c.id == categoryId) return c;
+    }
+    return ExpenseCategory(
+      id: categoryId,
+      name: fallbackType == TransactionType.income ? 'Thu nhập' : 'Chi tiêu',
+      iconName: 'other',
+      color: const Color(0xFF5C635E),
+      bgColor: const Color(0xFFE3E5E3),
+      type: fallbackType ?? TransactionType.expense,
+    );
+  }
 
   double get totalIncome => _transactions
       .where((t) => t.type == TransactionType.income)
@@ -23,34 +46,105 @@ class ExpenseProvider extends ChangeNotifier {
 
   double get balance => totalIncome - totalExpense;
 
-  SavingsGoal get emergencyFund {
-    return _savingsGoals.firstWhere(
-      (g) => g.id == 'sav-1',
-      orElse: () => _savingsGoals.isNotEmpty
-          ? _savingsGoals.first
-          : SavingsGoal(
-              id: 'sav-1',
-              name: 'Quỹ Dự Phòng Khẩn Cấp (3-6 tháng)',
-              targetAmount: 30000000,
-              currentAmount: 0,
-              icon: 'shield',
-              note: 'Tiền mặt an toàn',
-            ),
-    );
+  // --- Ngân sách ---
+  String _budgetKey(DateTime month, String categoryId) {
+    final m = month.month.toString().padLeft(2, '0');
+    return '${month.year}-$m:$categoryId';
   }
 
-  void addIncome({required double amount, String note = 'Thu nhập', DateTime? date}) {
+  double? getTotalBudget(DateTime month) {
+    return _monthlyBudgets[_budgetKey(month, 'total')];
+  }
+
+  void setTotalBudget(DateTime month, double? amount) {
+    final key = _budgetKey(month, 'total');
+    if (amount == null || amount <= 0) {
+      _monthlyBudgets.remove(key);
+    } else {
+      _monthlyBudgets[key] = amount;
+    }
+    notifyListeners();
+  }
+
+  double? getCategoryBudget(DateTime month, String categoryId) {
+    return _monthlyBudgets[_budgetKey(month, categoryId)];
+  }
+
+  void setCategoryBudget(DateTime month, String categoryId, double? amount) {
+    final key = _budgetKey(month, categoryId);
+    if (amount == null || amount <= 0) {
+      _monthlyBudgets.remove(key);
+    } else {
+      _monthlyBudgets[key] = amount;
+    }
+    notifyListeners();
+  }
+
+  // --- Truy vấn theo thời gian ---
+  List<TransactionItem> transactionsForDate(DateTime date) {
+    return _transactions
+        .where((t) => t.date.year == date.year && t.date.month == date.month && t.date.day == date.day)
+        .toList();
+  }
+
+  List<TransactionItem> transactionsForMonth(DateTime month) {
+    return _transactions
+        .where((t) => t.date.year == month.year && t.date.month == month.month)
+        .toList();
+  }
+
+  List<TransactionItem> transactionsForYear(int year) {
+    return _transactions.where((t) => t.date.year == year).toList();
+  }
+
+  double expenseForCategoryInMonth(String categoryId, DateTime month) {
+    return _transactions
+        .where((t) =>
+            t.type == TransactionType.expense &&
+            t.categoryId == categoryId &&
+            t.date.year == month.year &&
+            t.date.month == month.month)
+        .fold(0.0, (sum, t) => sum + t.amount);
+  }
+
+  double totalExpenseInMonth(DateTime month) {
+    return _transactions
+        .where((t) =>
+            t.type == TransactionType.expense &&
+            t.date.year == month.year &&
+            t.date.month == month.month)
+        .fold(0.0, (sum, t) => sum + t.amount);
+  }
+
+  double totalIncomeInMonth(DateTime month) {
+    return _transactions
+        .where((t) =>
+            t.type == TransactionType.income &&
+            t.date.year == month.year &&
+            t.date.month == month.month)
+        .fold(0.0, (sum, t) => sum + t.amount);
+  }
+
+  // --- Thêm / Xóa giao dịch ---
+  void addIncome({
+    required double amount,
+    String categoryId = 'salary',
+    String categoryName = 'Tiền lương',
+    String note = '',
+    DateTime? date,
+  }) {
     if (amount <= 0) return;
     final newTx = TransactionItem(
       id: 'tx_${DateTime.now().millisecondsSinceEpoch}',
-      categoryId: 'income',
-      categoryName: 'Thu nhập',
+      categoryId: categoryId,
+      categoryName: categoryName,
       amount: amount,
       type: TransactionType.income,
       date: date ?? DateTime.now(),
-      note: note.isEmpty ? 'Thu nhập' : note,
+      note: note,
     );
     _transactions.insert(0, newTx);
+    _transactions.sort((a, b) => b.date.compareTo(a.date));
     notifyListeners();
   }
 
@@ -74,6 +168,7 @@ class ExpenseProvider extends ChangeNotifier {
       note: note,
     );
     _transactions.insert(0, newTx);
+    _transactions.sort((a, b) => b.date.compareTo(a.date));
     notifyListeners();
   }
 
@@ -83,50 +178,14 @@ class ExpenseProvider extends ChangeNotifier {
   }
 
   void quickRecordPreset(PresetItem preset) {
-    final cat = _categories.firstWhere(
-      (c) => c.id == preset.categoryId,
-      orElse: () => ExpenseCategory(
-        id: preset.categoryId,
-        name: 'Chi tiêu',
-        iconName: 'category',
-        color: Colors.teal,
-        description: '',
-      ),
-    );
-
+    final cat = findCategory(preset.categoryId);
     addExpense(
       categoryId: preset.categoryId,
       categoryName: cat.name,
       subcategory: preset.name,
       amount: preset.price,
-      note: 'Ghi nhanh: ${preset.name}',
+      note: preset.name,
     );
-  }
-
-  void updatePresetPrice(String presetId, double newPrice) {
-    final index = _presets.indexWhere((p) => p.id == presetId);
-    if (index != -1) {
-      _presets[index] = _presets[index].copyWith(price: newPrice);
-      notifyListeners();
-    }
-  }
-
-  void addPresetItem({
-    required String categoryId,
-    required String name,
-    required double price,
-    String unit = 'phần',
-  }) {
-    final newItem = PresetItem(
-      id: 'preset_${DateTime.now().millisecondsSinceEpoch}',
-      categoryId: categoryId,
-      name: name,
-      price: price,
-      marketPrice: price,
-      unit: unit,
-    );
-    _presets.add(newItem);
-    notifyListeners();
   }
 
   void depositToSavings(String goalId, double amount) {
@@ -134,12 +193,10 @@ class ExpenseProvider extends ChangeNotifier {
     final index = _savingsGoals.indexWhere((g) => g.id == goalId);
     if (index != -1) {
       final goal = _savingsGoals[index];
-      _savingsGoals[index] = goal.copyWith(
-        currentAmount: goal.currentAmount + amount,
-      );
+      _savingsGoals[index] = goal.copyWith(currentAmount: goal.currentAmount + amount);
       addExpense(
-        categoryId: 'savings',
-        categoryName: 'Tiết kiệm & Dự phòng',
+        categoryId: 'other',
+        categoryName: 'Tiết kiệm',
         subcategory: goal.name,
         amount: amount,
         note: 'Tích lũy vào ${goal.name}',
@@ -154,11 +211,11 @@ class ExpenseProvider extends ChangeNotifier {
       final goal = _savingsGoals[index];
       final actualWithdrawn = amount > goal.currentAmount ? goal.currentAmount : amount;
       if (actualWithdrawn <= 0) return;
-      _savingsGoals[index] = goal.copyWith(
-        currentAmount: goal.currentAmount - actualWithdrawn,
-      );
+      _savingsGoals[index] = goal.copyWith(currentAmount: goal.currentAmount - actualWithdrawn);
       addIncome(
         amount: actualWithdrawn,
+        categoryId: 'investment',
+        categoryName: 'Rút tiết kiệm',
         note: 'Rút từ ${goal.name}',
       );
     }
@@ -166,24 +223,8 @@ class ExpenseProvider extends ChangeNotifier {
 
   void resetToCleanDefault() {
     _transactions = [];
-    _savingsGoals = [
-      SavingsGoal(
-        id: 'sav-1',
-        name: 'Quỹ Dự Phòng Khẩn Cấp (3-6 tháng)',
-        targetAmount: 30000000,
-        currentAmount: 0,
-        icon: 'shield',
-        note: 'Tiền mặt an toàn đề phòng sự cố bất ngờ',
-      ),
-      SavingsGoal(
-        id: 'sav-2',
-        name: 'Mua sắm thiết bị & Du lịch',
-        targetAmount: 15000000,
-        currentAmount: 0,
-        icon: 'flight',
-        note: 'Tích lũy mua sắm',
-      ),
-    ];
+    _monthlyBudgets.clear();
+    _savingsGoals = List.from(initialSavingsGoals);
     _presets = List.from(initialPresetItems);
     notifyListeners();
   }

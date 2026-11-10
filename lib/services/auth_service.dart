@@ -2,28 +2,18 @@ import 'dart:async';
 import '../models/user_model.dart';
 
 /// Dịch vụ Xác thực người dùng (AuthService).
-/// 
-/// Thiết kế mô phỏng chuẩn giao tiếp của Firebase Authentication:
-/// - signInWithEmailAndPassword
-/// - createUserWithEmailAndPassword
-/// - signOut
-/// - sendPasswordResetEmail
-/// 
-/// Khi bạn đã cấu hình Firebase Console xong và thêm thư viện `firebase_auth`,
-/// bạn chỉ cần thay thế phần xử lý bên trong bằng `FirebaseAuth.instance.*`.
 class AuthService {
   static final AuthService _instance = AuthService._internal();
   factory AuthService() => _instance;
   AuthService._internal();
 
-  // Danh sách tài khoản mẫu trong bộ nhớ
   final Map<String, _StoredUser> _users = {
     'demo@gmail.com': _StoredUser(
       password: 'password123',
       user: AppUser(
         uid: 'user_demo_01',
         email: 'demo@gmail.com',
-        displayName: 'Nguyễn Văn Demo',
+        displayName: 'Nguyễn Văn A',
         createdAt: DateTime.now().subtract(const Duration(days: 30)),
       ),
     ),
@@ -44,19 +34,17 @@ class AuthService {
   AppUser? get currentUser => _currentUser;
   Stream<AppUser?> get authStateChanges => _authStateController.stream;
 
-  /// Đăng nhập bằng Email và Mật khẩu
   Future<AppUser> signInWithEmailAndPassword({
     required String email,
     required String password,
   }) async {
-    // Giả lập độ trễ mạng như Firebase
-    await Future.delayed(const Duration(milliseconds: 600));
+    await Future.delayed(const Duration(milliseconds: 450));
 
     final normalizedEmail = email.trim().toLowerCase();
     final stored = _users[normalizedEmail];
 
     if (stored == null) {
-      throw AuthException('Không tìm thấy tài khoản với email này.');
+      throw AuthException('Không tìm thấy tài khoản với thông tin này.');
     }
 
     if (stored.password != password) {
@@ -68,18 +56,17 @@ class AuthService {
     return _currentUser!;
   }
 
-  /// Đăng ký tài khoản mới bằng Email và Mật khẩu
   Future<AppUser> createUserWithEmailAndPassword({
     required String email,
     required String password,
     required String displayName,
   }) async {
-    await Future.delayed(const Duration(milliseconds: 700));
+    await Future.delayed(const Duration(milliseconds: 550));
 
     final normalizedEmail = email.trim().toLowerCase();
 
     if (_users.containsKey(normalizedEmail)) {
-      throw AuthException('Email này đã được sử dụng bởi một tài khoản khác.');
+      throw AuthException('Tài khoản này đã tồn tại.');
     }
 
     if (password.length < 6) {
@@ -103,20 +90,32 @@ class AuthService {
     return newUser;
   }
 
-  /// Gửi email khôi phục mật khẩu
+  Future<AppUser?> updateDisplayName(String displayName) async {
+    if (_currentUser == null) return null;
+    final trimmed = displayName.trim();
+    if (trimmed.isEmpty) return _currentUser;
+
+    final updated = _currentUser!.copyWith(displayName: trimmed);
+    _currentUser = updated;
+    final existing = _users[updated.email];
+    if (existing != null) {
+      _users[updated.email] = _StoredUser(password: existing.password, user: updated);
+    }
+    _authStateController.add(_currentUser);
+    return _currentUser;
+  }
+
   Future<void> sendPasswordResetEmail({required String email}) async {
-    await Future.delayed(const Duration(milliseconds: 500));
+    await Future.delayed(const Duration(milliseconds: 400));
     final normalizedEmail = email.trim().toLowerCase();
 
     if (!_users.containsKey(normalizedEmail)) {
       throw AuthException('Không tìm thấy tài khoản với email này.');
     }
-    // Giả lập gửi email thành công
   }
 
-  /// Đăng xuất tài khoản
   Future<void> signOut() async {
-    await Future.delayed(const Duration(milliseconds: 300));
+    await Future.delayed(const Duration(milliseconds: 250));
     _currentUser = null;
     _authStateController.add(null);
   }

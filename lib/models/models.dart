@@ -32,6 +32,8 @@ class ExpenseCategory {
   final String name;
   final String iconName;
   final Color color;
+  final Color bgColor;
+  final TransactionType type;
   final String description;
 
   ExpenseCategory({
@@ -39,8 +41,10 @@ class ExpenseCategory {
     required this.name,
     required this.iconName,
     required this.color,
-    required this.description,
-  });
+    Color? bgColor,
+    this.type = TransactionType.expense,
+    this.description = '',
+  }) : bgColor = bgColor ?? color.withValues(alpha: 0.16);
 }
 
 class PresetItem {
