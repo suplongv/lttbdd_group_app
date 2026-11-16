@@ -84,8 +84,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       );
     }
 
+    final messenger = ScaffoldMessenger.of(context);
     Navigator.of(context).popUntil((route) => route.isFirst);
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.showSnackBar(
       SnackBar(
         content: Text(
           widget.isIncome

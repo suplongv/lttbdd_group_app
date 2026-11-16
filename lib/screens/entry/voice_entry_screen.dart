@@ -134,8 +134,9 @@ class _VoiceEntryScreenState extends State<VoiceEntryScreen>
       );
     }
 
+    final messenger = ScaffoldMessenger.of(context);
     Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.showSnackBar(
       SnackBar(
         content: Text('Đã ghi nhanh: "$raw"'),
         backgroundColor: AppColors.darkGreen,
@@ -318,4 +319,3 @@ class _VoiceEntryScreenState extends State<VoiceEntryScreen>
     );
   }
 }
-
